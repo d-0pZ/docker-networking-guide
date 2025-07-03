@@ -1,4 +1,4 @@
-# 🐳 Docker: Networking
+# 🐳 Docker: Container Networking
 
 **Objective:** Master Docker container networking fundamentals through hands-on demonstration
 
@@ -52,21 +52,87 @@ sudo docker network inspect bridge
 
 ## Section 2: Default vs Custom Networks
 
-### Default Bridge Limitations
+### Default Bridge Limitations - Practical Demonstration
 
-The default bridge network has significant limitations:
-- Containers communicate only via IP addresses (no DNS resolution)
-- No built-in service discovery
-- Single flat network topology
-- Limited security isolation
+Let's see these limitations in action:
 
-### Custom Networks Advantages
+**Create containers on the default bridge:**
+```bash
+sudo docker run -d --name default-app1 alpine:3.8 sleep 300
+sudo docker run -d --name default-app2 alpine:3.8 sleep 300
+```
 
-Custom networks provide:
-- **Name-based communication:** DNS resolution for container names
-- **Enhanced isolation:** Separate network segments
-- **Flexible configuration:** Custom IP ranges and policies
-- **Better security:** Controlled inter-container communication
+**Test 1: No DNS Resolution**
+```bash
+sudo docker exec default-app1 ping -c 3 default-app2
+# Expected: "ping: bad address 'default-app2'" - NAME RESOLUTION FAILS
+```
+
+**Test 2: Must Use IP Addresses**
+```bash
+# Get IP of default-app2
+sudo docker inspect default-app2 | grep IPAddress
+# Use the IP (e.g., 172.17.0.3) instead of name
+sudo docker exec default-app1 ping -c 3 172.17.0.3
+# Expected: SUCCESS - but only because we used IP, not name
+```
+
+**Test 3: Single Flat Network**
+```bash
+sudo docker network inspect bridge
+# Shows ALL containers share same subnet (usually 172.17.0.0/16)
+# No network segmentation possible
+```
+
+**Test 4: Limited Security Isolation**
+```bash
+# ALL containers on default bridge can reach each other
+# No way to isolate "database" from "web" containers
+# Security relies only on application-level controls
+```
+
+### Custom Networks Advantages - Practical Demonstration
+
+**Create custom network and containers:**
+```bash
+sudo docker network create --subnet 10.0.50.0/24 demo-network
+sudo docker run -d --name custom-app1 --network demo-network alpine:3.8 sleep 300
+sudo docker run -d --name custom-app2 --network demo-network alpine:3.8 sleep 300
+```
+
+**Test 1: DNS Resolution Works**
+```bash
+sudo docker exec custom-app1 ping -c 3 custom-app2
+# Expected: SUCCESS - name resolves automatically
+```
+
+**Test 2: Network Isolation**
+```bash
+# Containers on different custom networks cannot communicate
+sudo docker network create --subnet 10.0.51.0/24 isolated-network
+sudo docker run -d --name isolated-app --network isolated-network alpine:3.8 sleep 300
+
+sudo docker exec custom-app1 ping -c 3 isolated-app
+# Expected: "ping: bad address 'isolated-app'" - NETWORK ISOLATION WORKS
+```
+
+**Test 3: Security Segmentation**
+```bash
+# Can create separate networks for different application tiers
+sudo docker network create --subnet 10.0.52.0/24 database-network
+sudo docker network create --subnet 10.0.53.0/24 web-network
+# Database containers are isolated from web containers by default
+```
+
+### Why This Matters
+
+| Feature | Default Bridge | Custom Networks |
+|---------|----------------|-----------------|
+| **Container Communication** | IP addresses only | Names + IP addresses |
+| **Security** | All containers can reach each other | Network-level isolation |
+| **Scalability** | Single flat network | Multiple isolated networks |
+| **Service Discovery** | Manual IP management | Automatic DNS resolution |
+| **Production Ready** | ❌ Not recommended | ✅ Industry standard |
 
 ---
 
@@ -120,14 +186,14 @@ sudo docker run -it \
 
 ### Analyze Network Interfaces
 
-**Inside the container, check IP configuration:**
+**Inside container, check IP configuration:**
 ```bash
 ip -f inet -4 -o addr
 ```
 
 **Parameter breakdown:**
 - `ip`: Modern Linux networking tool
-- `-f inet`: Filter for Internet Protocol family
+- `-f inet`: Filter for internet protocol family
 - `-4`: IPv4 addresses only
 - `-o`: One-line output format
 - `addr`: Display IP addresses
@@ -151,7 +217,7 @@ apk update && apk add nmap
 **Command breakdown:**
 - `apk`: Alpine Package Keeper
 - `update`: Refresh package repository
-- `&&`: Run the second command only if the first succeeds
+- `&&`: Run second command only if first succeeds
 - `add nmap`: Install Network Mapper for discovery
 
 ### Network Scanning
@@ -185,11 +251,11 @@ sudo docker network create --subnet 10.0.43.0/24 network-B
 sudo docker network connect network-B container1
 ```
 
-Now, container1 has interfaces on both networks and can communicate with containers on either network.
+Now container1 has interfaces on both networks and can communicate with containers on either network.
 
 ### Test Multi-Network Communication
 
-**Create a container on the second network:**
+**Create container on second network:**
 ```bash
 sudo docker run -d \
   --name container2 \
@@ -200,7 +266,7 @@ sudo docker run -d \
 
 **Parameter explanations:**
 - `-d`: Detached mode (background)
-- `sleep 300`: Keeps the container running for 5 minutes (prevents immediate exit)
+- `sleep 300`: Keeps container running for 5 minutes (prevents immediate exit)
 
 **Test connectivity:**
 ```bash
@@ -313,7 +379,7 @@ sudo docker exec app1 ping -c 3 isolated-app
 4. **Scalability:** Easy addition/removal of containers
 
 **Production Security:**
-- Use custom networks instead of the default bridge
+- Use custom networks instead of default bridge
 - Minimize published ports: `-p 127.0.0.1:8080:8080`
 - Implement network segmentation for sensitive applications
 - Plan IP ranges to avoid conflicts
