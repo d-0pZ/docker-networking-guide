@@ -1,6 +1,6 @@
 # 🐳 Docker: Container Networking
   
-**Objective:** Master Docker container networking fundamentals through systematic exploration and hands-on demonstration
+**Objective:** Master Docker container networking fundamentals through hands-on demonstration
 
 ---
 
